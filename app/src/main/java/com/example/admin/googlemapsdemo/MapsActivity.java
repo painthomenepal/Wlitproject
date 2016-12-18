@@ -1,113 +1,126 @@
 package com.example.admin.googlemapsdemo;
 
 import android.Manifest;
+import android.app.Activity;
 import android.content.Context;
 import android.content.DialogInterface;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
-import android.net.Uri;
 import android.provider.Settings;
+import android.support.annotation.NonNull;
+import android.support.annotation.Nullable;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
-import android.support.v4.content.ContextCompat;
+import android.support.v4.content.PermissionChecker;
 import android.support.v7.app.AlertDialog;
-import com.google.android.gms.appindexing.Action;
-import com.google.android.gms.appindexing.AppIndex;
+
+import com.google.android.gms.common.ConnectionResult;
 import com.google.android.gms.common.api.GoogleApiClient;
-import android.location.LocationListener;
+
+import com.google.android.gms.location.LocationServices;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.model.BitmapDescriptorFactory;
 import com.google.android.gms.maps.model.LatLng;
-import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-import java.util.Map;
-
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback,
+        GoogleApiClient.ConnectionCallbacks,
+        GoogleApiClient.OnConnectionFailedListener {
 
     private GoogleMap mMap;
-    /**
-     * ATTENTION: This was auto-generated to implement the App Indexing API.
-     * See https://g.co/AppIndexing/AndroidStudio for more information.
-     */
     private GoogleApiClient client;
     LocationManager lm;
-    LocationListener ll;
-    Location l;
-    LatLng pos;
-    Marker marker = null;
 
+    /**
+     * Apply this following logical sequence in your {@code onCreate}
+     * <p>
+     * 1) Instantiate the {@link SupportMapFragment} via {@link SupportMapFragment#getMapAsync(OnMapReadyCallback)}
+     * <p>
+     * Using the {@link SupportMapFragment#getMapAsync(OnMapReadyCallback)} assures that the {@link GoogleMap} object is not null
+     * <p>
+     * 2)Check if location permission is enabled via {@link ActivityCompat#checkSelfPermission(Context, String)}
+     * <p>
+     * In cases where permissions are not granted, request permission via {@link ActivityCompat#requestPermissions(Activity, String[], int)}
+     * The result to the permission request call is captured via {@link #onRequestPermissionsResult(int, String[], int[])}
+     * which is similar to how {@link Activity#startActivityForResult(Intent, int)}.
+     * <p>Please refer to <a href="https://goo.gl/TrNeVC">documentation</a> for more info
+     * <p>
+     * While asking for permission, there is a possibility that the user can deny access. In such cases
+     * Android provides a way for the app to provide justification via
+     * {@link ActivityCompat#shouldShowRequestPermissionRationale(Activity, String)}
+     * <p>Please refer to <a href="https://goo.gl/VdCpeO">documentation</a> for more info
+     * <p>
+     * 3) Check if {@link LocationManager#GPS_PROVIDER} is enabled
+     * <p>
+     * This step is not necessary, you can ignore this altogether because we are using {@link GoogleApiClient}
+     * for location requests. But asking the user to trigger his/her GPS allows for an accurate reading
+     */
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
 
-        lm = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
-        ll = new LocationListener() {
-            @Override
-            public void onLocationChanged(Location location) {
-                if (marker!=null){
-                    marker.remove();
-                }
-               // marker = mMap.addMarker(new MarkerOptions().position(new LatLng(location.getLatitude(),location.getLongitude())));
-            }
-
-            @Override
-            public void onStatusChanged(String provider, int status, Bundle extras) {
-            }
-
-            @Override
-            public void onProviderEnabled(String provider) {
-            }
-
-            @Override
-            public void onProviderDisabled(String provider) {
-            }
-        };
-        if(lm.isProviderEnabled(LocationManager.GPS_PROVIDER)){
-            //do nothing
-            AlertDialog.Builder builder = new AlertDialog.Builder(this).setTitle("Deactivate GPS").setNegativeButton("Disable", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    startActivity(intent);
-                }
-            }).setMessage(" deactivate GPS if you want");
-            builder.create().show();
-
-        }
-        else {
-            //enable loation
-            AlertDialog.Builder builder = new AlertDialog.Builder(this).setTitle("Activate GPS").setPositiveButton("Enable", new DialogInterface.OnClickListener() {
-                @Override
-                public void onClick(DialogInterface dialog, int which) {
-                    Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
-                    startActivity(intent);
-                }
-            }).setMessage("Please activate GPS");
-            builder.create().show();
-        }
-
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
-        mapFragment.getMap();
 
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client = new GoogleApiClient.Builder(this).addApi(AppIndex.API).build();
+        // 1) check if location permission is enabled
+        // if not, ask for permission
+        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION)
+                != PackageManager.PERMISSION_GRANTED &&
+                ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION)
+                        != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                    Manifest.permission.ACCESS_COARSE_LOCATION}, 100);
+            return;
+        } else {
+
+            // 2) check if GPS is enabled, not necessary but increases accuracy
+            // if not, activate
+            lm = (LocationManager) this.getSystemService(Context.LOCATION_SERVICE);
+            if (!lm.isProviderEnabled(LocationManager.GPS_PROVIDER)) {
+                //enable loation
+                AlertDialog.Builder builder = new AlertDialog.Builder(this).setTitle("Activate GPS")
+                        .setPositiveButton("Enable", new DialogInterface.OnClickListener() {
+                            @Override
+                            public void onClick(DialogInterface dialog, int which) {
+                                Intent intent = new Intent(Settings.ACTION_LOCATION_SOURCE_SETTINGS);
+                                startActivity(intent);
+                            }
+                        }).setMessage("Please activate GPS");
+                builder.create().show();
+            } else {
+                // call 3) google api, get location
+                client = new GoogleApiClient.Builder(this)
+                        .addConnectionCallbacks(this)
+                        .addOnConnectionFailedListener(this)
+                        .addApi(LocationServices.API).build();
+            }
+        }
     }
 
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == 100) {
+            for (int i = 0; i < grantResults.length; i++) {
+                if (i == PermissionChecker.PERMISSION_DENIED) {
+                    // re request for permission
+                    //
+                }
+            }
 
+            // check if GPS is activated
 
+        }
+    }
 
     /**
      * Manipulates the map once available.
@@ -120,94 +133,43 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      */
     @Override
     public void onMapReady(GoogleMap googleMap) {
+
+        // add location marker here
+        // or list down nearby banks here
         mMap = googleMap;
-        if(ContextCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED) {
-            lm.requestLocationUpdates(lm.NETWORK_PROVIDER, 0, 0, ll);
+    }
+
+    @Override
+    public void onConnected(@Nullable Bundle bundle) {
+        try {
+            Location location = LocationServices.FusedLocationApi.getLastLocation(client);
+            if (location != null) {
+                // Getting latitude of the current location
+                double latitude = location.getLatitude();
+
+                // Getting longitude of the current location
+                double longitude = location.getLongitude();
+
+                // Creating a LatLng object for the current location
+                LatLng latLng = new LatLng(latitude, longitude);
+
+                mMap.addMarker(new MarkerOptions().position(latLng).title("Current Location")
+                        .icon(BitmapDescriptorFactory.fromResource(R.drawable.ic_image)));
+                mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng, 16));
+            }
+        } catch (SecurityException e) {
+            e.printStackTrace();
         }
+    }
 
-
-        mMap.setMyLocationEnabled(true);
-        if (ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED && ActivityCompat.checkSelfPermission(this, Manifest.permission.ACCESS_COARSE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
-            return;
-        }
-        Criteria criteria = new Criteria();
-
-        // Getting the name of the best provider
-        String provider = lm.getBestProvider(criteria, true);
-
-        // Getting Current Location
-        Location location = lm.getLastKnownLocation(LocationManager.NETWORK_PROVIDER);
-
-        if (location != null) {
-            // Getting latitude of the current location
-            double latitude = location.getLatitude();
-
-            // Getting longitude of the current location
-            double longitude = location.getLongitude();
-
-            // Creating a LatLng object for the current location
-            LatLng latLng = new LatLng(latitude, longitude);
-
-            googleMap.addMarker(new MarkerOptions().position(latLng).title("Current Location").icon(BitmapDescriptorFactory.fromResource(R.drawable.imageeee)));
-            mMap.animateCamera(CameraUpdateFactory.newLatLngZoom(latLng,16));
-
-        }
+    @Override
+    public void onConnectionSuspended(int i) {
 
     }
 
 
     @Override
-    public void onStart() {
-        super.onStart();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        client.connect();
-        Action viewAction;
-        viewAction = Action.newAction(
-                // TODO: choose an action type.
-                "Maps Page",
-                Action.TYPE_VIEW, // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app URL is correct.
-                Uri.parse("android-app://com.example.admin.googlemapsdemo/http/host/path")
-        );
-        AppIndex.AppIndexApi.start(client, viewAction);
-    }
-    public void onResume()
-    {
-        super.onResume();
-    }
-
-    @Override
-    public void onStop() {
-        super.onStop();
-
-        // ATTENTION: This was auto-generated to implement the App Indexing API.
-        // See https://g.co/AppIndexing/AndroidStudio for more information.
-        Action viewAction = Action.newAction(
-                Action.TYPE_VIEW, // TODO: choose an action type.
-                "Maps Page", // TODO: Define a title for the content shown.
-                // TODO: If you have web page content that matches this app activity's content,
-                // make sure this auto-generated web page URL is correct.
-                // Otherwise, set the URL to null.
-                Uri.parse("http://host/path"),
-                // TODO: Make sure this auto-generated app URL is correct.
-                Uri.parse("android-app://com.example.admin.googlemapsdemo/http/host/path")
-        );
-        AppIndex.AppIndexApi.end(client, viewAction);
-        client.disconnect();
+    public void onConnectionFailed(@NonNull ConnectionResult connectionResult) {
 
     }
-
 }
