@@ -113,11 +113,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             for (int i = 0; i < grantResults.length; i++) {
                 if (i == PermissionChecker.PERMISSION_DENIED) {
                     // re request for permission
-                    //
+                   // ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION,
+                           // Manifest.permission.ACCESS_COARSE_LOCATION}, 100);
+                        //
                 }
             }
 
             // check if GPS is activated
+
+
 
         }
     }
@@ -136,6 +140,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         // add location marker here
         // or list down nearby banks here
+        mMap.addMarker(new MarkerOptions().position(new LatLng(27.657905, 85.321447)).title("Ringroad, Patan").snippet("EVEREST BANK ATM"));
+        mMap.addMarker(new MarkerOptions().position(new LatLng(27.735463, 85.334093)).title("Maharajgung,Kathmandu").snippet("EVEREST BANK ATM"));
+        mMap.addMarker(new MarkerOptions().position(new LatLng(27.687441, 85.333586)).title("MadanBhandari,Kathmandu").snippet("EVEREST BANK ATM"));
         mMap = googleMap;
     }
 
